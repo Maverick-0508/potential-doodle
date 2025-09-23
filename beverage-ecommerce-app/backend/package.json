@@ -1,0 +1,25 @@
+{
+  "name": "beverage-ecommerce-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "axios": "latest",
+    "bcryptjs": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "express-validator": "latest",
+    "jsonwebtoken": "latest",
+    "mongoose": "latest"
+  },
+  "devDependencies": {
+    "jest": "^30.1.3",
+    "mongodb-memory-server": "^10.2.1",
+    "nodemon": "latest",
+    "supertest": "^7.1.4"
+  }
+}
