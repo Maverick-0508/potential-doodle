@@ -52,7 +52,7 @@ const app = express();
 
 // Enhanced CORS configuration
 const corsOptions = {
-  origin: process.env.NODE_ENV === 'production' 
+  origin: process.env.NODE_ENV === 'production'
     ? process.env.FRONTEND_URL || 'http://localhost:3000'
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
   credentials: true,
@@ -105,9 +105,9 @@ app.get('/', (req, res) => {
 app.get('/api/health', (req, res) => {
   const mpesaService = require('./services/mpesaService');
   const configStatus = mpesaService.getConfigStatus();
-  
-  res.json({ 
-    status: 'OK', 
+
+  res.json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
@@ -127,7 +127,7 @@ app.get('/api/health', (req, res) => {
 app.get('/api/config/status', (req, res) => {
   const mpesaService = require('./services/mpesaService');
   const configStatus = mpesaService.getConfigStatus();
-  
+
   res.json({
     jwt: {
       configured: !!process.env.JWT_SECRET,
@@ -150,21 +150,21 @@ app.get('/api/config/status', (req, res) => {
 app.post('/api/seed/products', async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'production') {
-      return res.status(403).json({ 
-        message: 'Product seeding is disabled in production' 
+      return res.status(403).json({
+        message: 'Product seeding is disabled in production'
       });
     }
 
     const products = await seedProducts();
-    res.json({ 
-      message: 'Products seeded successfully', 
-      count: products.length 
+    res.json({
+      message: 'Products seeded successfully',
+      count: products.length
     });
   } catch (error) {
     console.error('Error seeding products:', error);
-    res.status(500).json({ 
-      message: 'Error seeding products', 
-      error: error.message 
+    res.status(500).json({
+      message: 'Error seeding products',
+      error: error.message
     });
   }
 });
@@ -193,17 +193,17 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/beverage_e
 // Enhanced MongoDB connection
 const connectToDatabase = async () => {
   try {
-    await mongoose.connect(MONGO_URI, { 
-      useNewUrlParser: true, 
+    await mongoose.connect(MONGO_URI, {
+      useNewUrlParser: true,
       useUnifiedTopology: true,
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
-    
+
     console.log('✅ Connected to MongoDB');
     console.log(`📊 Database: ${mongoose.connection.name}`);
-    
+
     // Auto-seed products if none exist
     const Product = require('./models/Product');
     const productCount = await Product.countDocuments();
@@ -218,7 +218,7 @@ const connectToDatabase = async () => {
     } else {
       console.log(`📦 Found ${productCount} products in database`);
     }
-    
+
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
     process.exit(1);
