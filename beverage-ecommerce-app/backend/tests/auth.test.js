@@ -24,6 +24,6 @@ describe('Auth API', () => {
     const res = await request(app)
       .post('/api/auth/login')
       .send({ email: 'fake@example.com', password: 'wrongpass' });
-  expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(400);
   });
 });
