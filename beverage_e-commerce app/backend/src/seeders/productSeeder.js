@@ -12,6 +12,32 @@ const sampleProducts = [
       { size: '500ml', price: 70, stock: 150 },
       { size: '1L', price: 120, stock: 80 }
     ],
+    packets: [
+      { 
+        packetType: '6-pack', 
+        unitsPerPacket: 6, 
+        size: '330ml', 
+        pricePerPacket: 280, 
+        savings: 20, 
+        stock: 50 
+      },
+      { 
+        packetType: '12-pack', 
+        unitsPerPacket: 12, 
+        size: '330ml', 
+        pricePerPacket: 540, 
+        savings: 60, 
+        stock: 30 
+      },
+      { 
+        packetType: '6-pack', 
+        unitsPerPacket: 6, 
+        size: '500ml', 
+        pricePerPacket: 390, 
+        savings: 30, 
+        stock: 40 
+      }
+    ],
     rating: 4.5,
     isActive: true
   },
@@ -26,6 +52,32 @@ const sampleProducts = [
       { size: '1L', price: 50, stock: 150 },
       { size: '1.5L', price: 70, stock: 100 }
     ],
+    packets: [
+      { 
+        packetType: '6-pack', 
+        unitsPerPacket: 6, 
+        size: '500ml', 
+        pricePerPacket: 160, 
+        savings: 20, 
+        stock: 60 
+      },
+      { 
+        packetType: '12-pack', 
+        unitsPerPacket: 12, 
+        size: '500ml', 
+        pricePerPacket: 300, 
+        savings: 60, 
+        stock: 40 
+      },
+      { 
+        packetType: '24-pack', 
+        unitsPerPacket: 24, 
+        size: '500ml', 
+        pricePerPacket: 576, 
+        savings: 144, 
+        stock: 20 
+      }
+    ],
     rating: 4.2,
     isActive: true
   },
@@ -39,6 +91,24 @@ const sampleProducts = [
       { size: '300ml', price: 80, stock: 120 },
       { size: '500ml', price: 120, stock: 90 }
     ],
+    packets: [
+      { 
+        packetType: '4-pack', 
+        unitsPerPacket: 4, 
+        size: '300ml', 
+        pricePerPacket: 300, 
+        savings: 20, 
+        stock: 30 
+      },
+      { 
+        packetType: '6-pack', 
+        unitsPerPacket: 6, 
+        size: '300ml', 
+        pricePerPacket: 450, 
+        savings: 30, 
+        stock: 25 
+      }
+    ],
     rating: 4.7,
     isActive: true
   },
@@ -51,6 +121,24 @@ const sampleProducts = [
     variations: [
       { size: '250ml', price: 150, stock: 80 },
       { size: '355ml', price: 200, stock: 60 }
+    ],
+    packets: [
+      { 
+        packetType: '4-pack', 
+        unitsPerPacket: 4, 
+        size: '250ml', 
+        pricePerPacket: 570, 
+        savings: 30, 
+        stock: 25 
+      },
+      { 
+        packetType: '8-pack', 
+        unitsPerPacket: 8, 
+        size: '250ml', 
+        pricePerPacket: 1080, 
+        savings: 120, 
+        stock: 15 
+      }
     ],
     rating: 4.3,
     isActive: true

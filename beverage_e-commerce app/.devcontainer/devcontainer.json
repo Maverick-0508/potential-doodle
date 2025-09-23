@@ -1,0 +1,154 @@
+{
+  "name": "Beverage E-Commerce Full Stack",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  // Configure tool-specific properties
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": true
+        },
+        "javascript.format.enable": true,
+        "typescript.format.enable": true,
+        "files.associations": {
+          "*.json": "jsonc"
+        },
+        "emmet.includeLanguages": {
+          "javascript": "javascriptreact"
+        },
+        "git.enableSmartCommit": true,
+        "git.confirmSync": false
+      },
+      
+      "extensions": [
+        // JavaScript/Node.js
+        "ms-vscode.vscode-node-azure-pack",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        
+        // React/Next.js
+        "ms-vscode.vscode-typescript-next",
+        "formulahendry.auto-rename-tag",
+        "christian-kohler.path-intellisense",
+        
+        // Database
+        "ms-vscode.vscode-mongo",
+        "mongodb.mongodb-vscode",
+        
+        // Docker
+        "ms-azuretools.vscode-docker",
+        
+        // Git
+        "eamodio.gitlens",
+        "github.vscode-pull-request-github",
+        
+        // Productivity
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml",
+        "ms-vscode-remote.remote-containers",
+        "github.copilot",
+        "github.copilot-chat",
+        
+        // Testing
+        "ms-vscode.test-adapter-converter",
+        "orta.vscode-jest",
+        
+        // Utilities
+        "christian-kohler.npm-intellisense",
+        "ms-vscode.vscode-node-azure-pack",
+        "humao.rest-client"
+      ]
+    }
+  },
+
+  // Features to add to the dev container
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true,
+      "username": "vscode",
+      "uid": "1000",
+      "gid": "1000"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "nodeGypDependencies": true,
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "ppa": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "installDirectlyFromGitHubRelease": true,
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "moby": true,
+      "azureDnsAutoDetection": true,
+      "installDockerBuildx": true,
+      "version": "latest"
+    }
+  },
+
+  // Use 'forwardPorts' to make a list of ports inside the container available locally
+  "forwardPorts": [
+    3000,  // Next.js frontend
+    3001,  // Next.js frontend (alternative)
+    5000,  // Express backend
+    27017, // MongoDB
+    9229   // Node.js debug port
+  ],
+
+  // Port attributes
+  "portsAttributes": {
+    "3000": {
+      "label": "Frontend (Next.js)",
+      "onAutoForward": "notify"
+    },
+    "3001": {
+      "label": "Frontend (Next.js Alt)",
+      "onAutoForward": "notify"
+    },
+    "5000": {
+      "label": "Backend (Express API)",
+      "onAutoForward": "notify"
+    },
+    "27017": {
+      "label": "MongoDB Database",
+      "onAutoForward": "silent"
+    },
+    "9229": {
+      "label": "Node.js Debug",
+      "onAutoForward": "silent"
+    }
+  },
+
+  // Commands to run after container creation
+  "postCreateCommand": ".devcontainer/setup.sh",
+
+  // Commands to run after the container starts
+  "postStartCommand": "echo 'Container started successfully! 🚀'",
+
+  // Configure environment variables
+  "containerEnv": {
+    "NODE_ENV": "development",
+    "MONGO_URI": "mongodb://mongodb:27017/beverage_ecommerce",
+    "FRONTEND_URL": "http://localhost:3001",
+    "BACKEND_URL": "http://localhost:5000"
+  },
+
+  // Mount the workspace
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+  ],
+
+  // Set the user
+  "remoteUser": "vscode"
+}

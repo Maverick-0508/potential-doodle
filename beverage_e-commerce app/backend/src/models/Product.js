@@ -18,6 +18,39 @@ const productVariationSchema = new mongoose.Schema({
   }
 });
 
+const packetVariationSchema = new mongoose.Schema({
+  packetType: {
+    type: String,
+    required: true,
+    trim: true // e.g., "6-pack", "12-pack", "24-pack"
+  },
+  unitsPerPacket: {
+    type: Number,
+    required: true,
+    min: 2 // Minimum 2 units to be considered a packet
+  },
+  size: {
+    type: String,
+    required: true,
+    trim: true // Size of each individual unit in the packet
+  },
+  pricePerPacket: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  savings: {
+    type: Number,
+    default: 0,
+    min: 0 // Amount saved compared to buying individually
+  },
+  stock: {
+    type: Number,
+    default: 0,
+    min: 0
+  }
+});
+
 const productSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -50,6 +83,7 @@ const productSchema = new mongoose.Schema({
     min: 0
   },
   variations: [productVariationSchema],
+  packets: [packetVariationSchema],
   image: {
     type: String,
     default: ''
@@ -108,8 +142,10 @@ productSchema.index({ name: 'text', brand: 'text', description: 'text' });
 
 // Calculate total stock before saving
 productSchema.pre('save', function(next) {
-  if (this.isModified('variations')) {
-    this.totalStock = this.variations.reduce((total, variation) => total + variation.stock, 0);
+  if (this.isModified('variations') || this.isModified('packets')) {
+    const variationStock = this.variations.reduce((total, variation) => total + variation.stock, 0);
+    const packetStock = this.packets.reduce((total, packet) => total + (packet.stock * packet.unitsPerPacket), 0);
+    this.totalStock = variationStock + packetStock;
   }
   next();
 });

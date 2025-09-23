@@ -24,12 +24,16 @@ import {
   MenuItem,
   Avatar,
   CircularProgress,
-  Alert
+  Alert,
+  ToggleButton,
+  ToggleButtonGroup
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import AddIcon from '@mui/icons-material/Add';
+import RemoveIcon from '@mui/icons-material/Remove';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function HomePage() {
@@ -42,6 +46,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [anchorEl, setAnchorEl] = useState(null);
+  const [purchaseMode, setPurchaseMode] = useState('individual'); // 'individual' or 'packets'
+  const [selectedItems, setSelectedItems] = useState({}); // {productId: {variationIndex/packetIndex: quantity}}
   const router = useRouter();
 
   useEffect(() => {
@@ -124,6 +130,74 @@ export default function HomePage() {
     handleMenuClose();
   };
 
+  const updateItemQuantity = (productId, itemIndex, change) => {
+    setSelectedItems(prev => {
+      const productItems = prev[productId] || {};
+      const currentQty = productItems[itemIndex] || 0;
+      const newQty = Math.max(0, currentQty + change);
+      
+      const updatedProduct = { ...productItems };
+      if (newQty === 0) {
+        delete updatedProduct[itemIndex];
+      } else {
+        updatedProduct[itemIndex] = newQty;
+      }
+      
+      const updated = { ...prev };
+      if (Object.keys(updatedProduct).length === 0) {
+        delete updated[productId];
+      } else {
+        updated[productId] = updatedProduct;
+      }
+      
+      return updated;
+    });
+  };
+
+  const getItemQuantity = (productId, itemIndex) => {
+    return selectedItems[productId]?.[itemIndex] || 0;
+  };
+
+  const getTotalCartItems = () => {
+    return Object.values(selectedItems).reduce((total, productItems) => 
+      total + Object.values(productItems).reduce((sum, qty) => sum + qty, 0), 0
+    );
+  };
+
+  const getCartTotal = () => {
+    let total = 0;
+    Object.entries(selectedItems).forEach(([productId, items]) => {
+      const product = products.find(p => p._id === productId);
+      if (product) {
+        Object.entries(items).forEach(([itemKey, quantity]) => {
+          if (itemKey.startsWith('ind_')) {
+            const variationIndex = parseInt(itemKey.split('_')[1]);
+            const variation = product.variations[variationIndex];
+            if (variation) {
+              total += variation.price * quantity;
+            }
+          } else if (itemKey.startsWith('pkt_')) {
+            const packetIndex = parseInt(itemKey.split('_')[1]);
+            const packet = product.packets[packetIndex];
+            if (packet) {
+              total += packet.pricePerPacket * quantity;
+            }
+          }
+        });
+      }
+    });
+    return total;
+  };
+
+  const handleViewCart = () => {
+    // Store cart data in localStorage or context for the cart page
+    localStorage.setItem('cartItems', JSON.stringify({
+      selectedItems,
+      products: products.filter(p => selectedItems[p._id])
+    }));
+    router.push('/cart');
+  };
+
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
@@ -142,8 +216,13 @@ export default function HomePage() {
             BeverageHub
           </Typography>
           
-          <IconButton color="inherit" sx={{ mr: 2 }}>
-            <Badge badgeContent={cartItems} color="error">
+          <IconButton 
+            color="inherit" 
+            sx={{ mr: 2 }} 
+            onClick={handleViewCart}
+            disabled={getTotalCartItems() === 0}
+          >
+            <Badge badgeContent={getTotalCartItems()} color="error">
               <ShoppingCartIcon />
             </Badge>
           </IconButton>
@@ -228,6 +307,24 @@ export default function HomePage() {
           </Tabs>
         )}
 
+        {/* Purchase Mode Toggle */}
+        <Box display="flex" justifyContent="center" sx={{ mb: 3 }}>
+          <ToggleButtonGroup
+            value={purchaseMode}
+            exclusive
+            onChange={(e, newMode) => newMode && setPurchaseMode(newMode)}
+            aria-label="purchase mode"
+            size="small"
+          >
+            <ToggleButton value="individual" aria-label="individual purchases">
+              Individual Items
+            </ToggleButton>
+            <ToggleButton value="packets" aria-label="packet purchases">
+              Bulk Packets
+            </ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+
         {/* Loading State */}
         {loading && (
           <Box display="flex" justifyContent="center" py={4}>
@@ -251,11 +348,25 @@ export default function HomePage() {
                     </IconButton>
                     
                     <CardMedia
-                      component="div"
+                      component="img"
+                      height="200"
+                      image={`/images/products/${product.name.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')}.svg`}
+                      alt={product.name}
+                      sx={{
+                        objectFit: 'contain',
+                        bgcolor: 'grey.50',
+                        p: 1
+                      }}
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                    <Box
                       sx={{
                         height: 200,
                         bgcolor: 'grey.200',
-                        display: 'flex',
+                        display: 'none',
                         alignItems: 'center',
                         justifyContent: 'center'
                       }}
@@ -263,7 +374,7 @@ export default function HomePage() {
                       <Typography color="text.secondary">
                         {product.name}
                       </Typography>
-                    </CardMedia>
+                    </Box>
                     
                     <CardContent>
                       <Typography variant="h6" gutterBottom>
@@ -274,29 +385,119 @@ export default function HomePage() {
                         {product.brand}
                       </Typography>
                       
-                      {product.variations && product.variations.length > 0 && (
-                        <Box display="flex" gap={0.5} mb={1} flexWrap="wrap">
+                      {/* Individual Mode */}
+                      {purchaseMode === 'individual' && product.variations && product.variations.length > 0 && (
+                        <Box mb={2}>
+                          <Typography variant="body2" fontWeight="bold" gutterBottom>
+                            Select Size:
+                          </Typography>
                           {product.variations.map((variation, index) => (
-                            <Chip
-                              key={index}
-                              label={`${variation.size} - KSh ${variation.price}`}
-                              size="small"
-                              variant="outlined"
-                              clickable
-                            />
+                            <Box key={index} display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                              <Chip
+                                label={`${variation.size} - KSh ${variation.price}`}
+                                size="small"
+                                variant="outlined"
+                                color="primary"
+                              />
+                              <Box display="flex" alignItems="center" gap={1}>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => updateItemQuantity(product._id, `ind_${index}`, -1)}
+                                  disabled={getItemQuantity(product._id, `ind_${index}`) === 0}
+                                >
+                                  <RemoveIcon fontSize="small" />
+                                </IconButton>
+                                <Typography variant="body2" sx={{ minWidth: '20px', textAlign: 'center' }}>
+                                  {getItemQuantity(product._id, `ind_${index}`)}
+                                </Typography>
+                                <IconButton 
+                                  size="small" 
+                                  onClick={() => updateItemQuantity(product._id, `ind_${index}`, 1)}
+                                >
+                                  <AddIcon fontSize="small" />
+                                </IconButton>
+                              </Box>
+                            </Box>
                           ))}
                         </Box>
                       )}
+
+                      {/* Packet Mode */}
+                      {purchaseMode === 'packets' && product.packets && product.packets.length > 0 && (
+                        <Box mb={2}>
+                          <Typography variant="body2" fontWeight="bold" gutterBottom>
+                            Select Packet:
+                          </Typography>
+                          {product.packets.map((packet, index) => (
+                            <Box key={index} mb={1}>
+                              <Box display="flex" justifyContent="space-between" alignItems="center">
+                                <Box>
+                                  <Chip
+                                    label={`${packet.packetType} (${packet.unitsPerPacket}×${packet.size})`}
+                                    size="small"
+                                    variant="outlined"
+                                    color="secondary"
+                                  />
+                                  <Typography variant="caption" display="block" color="success.main">
+                                    KSh {packet.pricePerPacket} (Save KSh {packet.savings})
+                                  </Typography>
+                                </Box>
+                                <Box display="flex" alignItems="center" gap={1}>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => updateItemQuantity(product._id, `pkt_${index}`, -1)}
+                                    disabled={getItemQuantity(product._id, `pkt_${index}`) === 0}
+                                  >
+                                    <RemoveIcon fontSize="small" />
+                                  </IconButton>
+                                  <Typography variant="body2" sx={{ minWidth: '20px', textAlign: 'center' }}>
+                                    {getItemQuantity(product._id, `pkt_${index}`)}
+                                  </Typography>
+                                  <IconButton 
+                                    size="small" 
+                                    onClick={() => updateItemQuantity(product._id, `pkt_${index}`, 1)}
+                                  >
+                                    <AddIcon fontSize="small" />
+                                  </IconButton>
+                                </Box>
+                              </Box>
+                            </Box>
+                          ))}
+                        </Box>
+                      )}
+
+                      {/* No options message */}
+                      {purchaseMode === 'packets' && (!product.packets || product.packets.length === 0) && (
+                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
+                          Packet options not available for this product
+                        </Typography>
+                      )}
                       
-                      <Typography variant="body2" color="text.secondary">
-                        Starting from KSh {product.basePrice || (product.variations?.[0]?.price || 'N/A')}
-                      </Typography>
+                      {/* Pricing Display */}
+                      {purchaseMode === 'individual' && (
+                        <Typography variant="body2" color="text.secondary">
+                          Starting from KSh {product.basePrice || (product.variations?.[0]?.price || 'N/A')}
+                        </Typography>
+                      )}
+                      
+                      {purchaseMode === 'packets' && product.packets && product.packets.length > 0 && (
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            Packet from KSh {Math.min(...product.packets.map(p => p.pricePerPacket))}
+                          </Typography>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 'bold' }}>
+                            Save up to KSh {Math.max(...product.packets.map(p => p.savings))}
+                          </Typography>
+                        </Box>
+                      )}
                       
                       <Box display="flex" justifyContent="space-between" alignItems="center" mt={2}>
                         <Typography variant="body2">
                           ⭐ {product.rating || 'New'}
                         </Typography>
-                        <Chip label="Add to Cart" color="primary" clickable />
+                        <Typography variant="body2" color="primary.main" fontWeight="bold">
+                          {Object.values(selectedItems[product._id] || {}).reduce((sum, qty) => sum + qty, 0)} in cart
+                        </Typography>
                       </Box>
                     </CardContent>
                   </Card>
@@ -317,6 +518,40 @@ export default function HomePage() {
           </Grid>
         )}
       </Container>
+
+      {/* Floating Cart Summary */}
+      {getTotalCartItems() > 0 && (
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: 20,
+            right: 20,
+            bgcolor: 'primary.main',
+            color: 'white',
+            p: 2,
+            borderRadius: 2,
+            minWidth: 200,
+            boxShadow: 3,
+            zIndex: 1000
+          }}
+        >
+          <Typography variant="h6" gutterBottom>
+            Cart Summary
+          </Typography>
+          <Typography variant="body2">
+            {getTotalCartItems()} items - KSh {getCartTotal()}
+          </Typography>
+          <Button 
+            fullWidth 
+            variant="contained" 
+            color="secondary" 
+            sx={{ mt: 1 }}
+            onClick={handleViewCart}
+          >
+            View Cart
+          </Button>
+        </Box>
+      )}
     </>
   );
 }

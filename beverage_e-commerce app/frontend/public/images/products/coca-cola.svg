@@ -1,0 +1,10 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#ffe4e1" stroke="#ddd" stroke-width="2"/>
+  <circle cx="100" cy="80" r="30" fill="#dc143c"/>
+  <rect x="85" y="110" width="30" height="50" fill="#dc143c" rx="5"/>
+  <circle cx="95" cy="70" r="2" fill="#fff"/>
+  <circle cx="105" cy="70" r="2" fill="#fff"/>
+  <circle cx="90" cy="85" r="1" fill="#fff"/>
+  <circle cx="110" cy="85" r="1" fill="#fff"/>
+  <text x="100" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666">Coca-Cola</text>
+</svg>

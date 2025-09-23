@@ -1,0 +1,8 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#f0fff0" stroke="#ddd" stroke-width="2"/>
+  <circle cx="100" cy="80" r="30" fill="#32cd32"/>
+  <rect x="85" y="110" width="30" height="50" fill="#32cd32" rx="5"/>
+  <circle cx="95" cy="70" r="3" fill="#fff"/>
+  <circle cx="105" cy="70" r="3" fill="#fff"/>
+  <text x="100" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666">Sprite</text>
+</svg>

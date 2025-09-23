@@ -1,0 +1,7 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#fff8dc" stroke="#ddd" stroke-width="2"/>
+  <circle cx="100" cy="80" r="30" fill="#ffd700"/>
+  <rect x="85" y="110" width="30" height="50" fill="#ffd700" rx="5"/>
+  <polygon points="100,50 105,65 120,65 108,75 113,90 100,80 87,90 92,75 80,65 95,65" fill="#ff8c00"/>
+  <text x="100" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666">Pineapple</text>
+</svg>

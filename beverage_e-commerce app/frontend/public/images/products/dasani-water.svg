@@ -1,0 +1,9 @@
+<svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" fill="#e6f3ff" stroke="#ddd" stroke-width="2"/>
+  <circle cx="100" cy="80" r="30" fill="#1e90ff"/>
+  <rect x="85" y="110" width="30" height="50" fill="#1e90ff" rx="5"/>
+  <path d="M85 130 Q100 120 115 130" stroke="#87ceeb" stroke-width="2" fill="none"/>
+  <path d="M85 140 Q100 130 115 140" stroke="#87ceeb" stroke-width="2" fill="none"/>
+  <path d="M85 150 Q100 140 115 150" stroke="#87ceeb" stroke-width="2" fill="none"/>
+  <text x="100" y="180" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="#666">Dasani Water</text>
+</svg>
