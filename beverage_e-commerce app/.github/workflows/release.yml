@@ -1,0 +1,132 @@
+name: Release Management
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: |
+        cd frontend && npm ci
+        cd ../backend && npm ci
+
+    - name: Run tests
+      run: |
+        cd frontend && npm test -- --watchAll=false
+        cd ../backend && npm test
+
+    - name: Build applications
+      run: |
+        cd frontend && npm run build
+        cd ../backend && npm run build || echo "No build script for backend"
+
+    - name: Generate changelog
+      id: changelog
+      run: |
+        # Get the latest tag
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -z "$LATEST_TAG" ]; then
+          echo "No previous tags found, generating changelog from first commit"
+          CHANGELOG=$(git log --pretty=format:"- %s (%h)" --reverse)
+        else
+          echo "Generating changelog since $LATEST_TAG"
+          CHANGELOG=$(git log $LATEST_TAG..HEAD --pretty=format:"- %s (%h)" --reverse)
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$CHANGELOG" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name || github.event.inputs.version }}
+        release_name: Release ${{ github.ref_name || github.event.inputs.version }}
+        body: |
+          ## Changes in this Release
+          
+          ${{ steps.changelog.outputs.changelog }}
+          
+          ## Docker Images
+          
+          - Frontend: `ghcr.io/${{ github.repository }}/frontend:${{ github.ref_name || github.event.inputs.version }}`
+          - Backend: `ghcr.io/${{ github.repository }}/backend:${{ github.ref_name || github.event.inputs.version }}`
+          
+          ## Deployment
+          
+          This release has been automatically tested and is ready for deployment.
+        draft: false
+        prerelease: ${{ contains(github.ref_name || github.event.inputs.version, 'beta') || contains(github.ref_name || github.event.inputs.version, 'alpha') || contains(github.ref_name || github.event.inputs.version, 'rc') }}
+
+    - name: Build and push Docker images
+      run: |
+        echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        
+        # Build and push frontend
+        cd frontend
+        docker build -t ghcr.io/${{ github.repository }}/frontend:${{ github.ref_name || github.event.inputs.version }} .
+        docker push ghcr.io/${{ github.repository }}/frontend:${{ github.ref_name || github.event.inputs.version }}
+        
+        # Build and push backend
+        cd ../backend
+        docker build -t ghcr.io/${{ github.repository }}/backend:${{ github.ref_name || github.event.inputs.version }} .
+        docker push ghcr.io/${{ github.repository }}/backend:${{ github.ref_name || github.event.inputs.version }}
+
+  deploy-release:
+    name: Deploy Release
+    needs: create-release
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+    - name: Deploy to production
+      run: |
+        echo "Deploying release ${{ github.ref_name || github.event.inputs.version }} to production"
+        # Add your production deployment logic here
+        # This could include:
+        # - Updating Kubernetes manifests with new image tags
+        # - Triggering deployment in your cloud platform
+        # - Running database migrations
+        # - Updating CDN configurations
+
+    - name: Post-deployment verification
+      run: |
+        echo "Running post-deployment verification..."
+        # Add verification steps:
+        # - Health checks
+        # - Smoke tests
+        # - Performance verification
+        # - Database connectivity checks
+
+    - name: Notify stakeholders
+      run: |
+        echo "Notifying stakeholders about successful release deployment"
+        # Add notification logic:
+        # - Slack/Discord notifications
+        # - Email notifications
+        # - Update monitoring dashboards

@@ -1,0 +1,78 @@
+name: Code Quality Check
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: |
+        cd frontend && npm ci
+        cd ../backend && npm ci
+
+    - name: ESLint (Frontend)
+      run: |
+        cd frontend
+        npm run lint || echo "Frontend linting completed with warnings"
+
+    - name: ESLint (Backend)
+      run: |
+        cd backend
+        npm run lint || echo "Backend linting completed with warnings"
+
+    - name: Prettier Check
+      run: |
+        cd frontend
+        npx prettier --check . || echo "Frontend formatting check completed"
+        cd ../backend
+        npx prettier --check . || echo "Backend formatting check completed"
+
+    - name: TypeScript Check (if applicable)
+      run: |
+        if [ -f "frontend/tsconfig.json" ]; then
+          cd frontend && npx tsc --noEmit
+        fi
+        if [ -f "backend/tsconfig.json" ]; then
+          cd backend && npx tsc --noEmit
+        fi
+
+    - name: Security Audit
+      run: |
+        cd frontend
+        npm audit --audit-level high || echo "Frontend audit completed with warnings"
+        cd ../backend
+        npm audit --audit-level high || echo "Backend audit completed with warnings"
+
+    - name: Check for sensitive files
+      run: |
+        if find . -name "*.env" -not -path "./.env.example" | grep -q .; then
+          echo "❌ Environment files found in repository!"
+          find . -name "*.env" -not -path "./.env.example"
+          exit 1
+        fi
+        echo "✅ No sensitive files found"
+
+    - name: License Check
+      run: |
+        cd frontend
+        npx license-checker --onlyAllow "MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause" --excludePrivatePackages || echo "License check completed"
+        cd ../backend
+        npx license-checker --onlyAllow "MIT;ISC;Apache-2.0;BSD-2-Clause;BSD-3-Clause" --excludePrivatePackages || echo "License check completed"

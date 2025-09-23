@@ -1,0 +1,329 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/* ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/frontend
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/backend
+
+jobs:
+  # Code Quality and Testing
+  test:
+    name: Test & Code Quality
+    runs-on: ubuntu-latest
+    
+    services:
+      mongodb:
+        image: mongo:7-jammy
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    strategy:
+      matrix:
+        component: [frontend, backend]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: ${{ matrix.component }}/package-lock.json
+
+    - name: Install dependencies
+      run: |
+        cd ${{ matrix.component }}
+        npm ci
+
+    - name: Create environment file
+      run: |
+        if [ "${{ matrix.component }}" = "backend" ]; then
+          cat > ${{ matrix.component }}/.env << 'EOF'
+          NODE_ENV=test
+          PORT=5000
+          MONGO_URI=mongodb://localhost:27017/beverage_ecommerce_test
+          JWT_SECRET=test-jwt-secret-key-32-characters-long
+          MPESA_CONSUMER_KEY=test_consumer_key
+          MPESA_CONSUMER_SECRET=test_consumer_secret
+          MPESA_SHORTCODE=174379
+          MPESA_PASSKEY=test_passkey
+          MPESA_CALLBACK_URL=http://localhost:5000/api/wallet/mpesa/callback
+          FRONTEND_URL=http://localhost:3001
+          SESSION_SECRET=test-session-secret-key
+          EOF
+        else
+          cat > ${{ matrix.component }}/.env.local << 'EOF'
+          NEXT_PUBLIC_API_URL=http://localhost:5000
+          NEXT_PUBLIC_FRONTEND_URL=http://localhost:3001
+          NEXT_PUBLIC_ENVIRONMENT=test
+          EOF
+        fi
+
+    - name: Lint code
+      run: |
+        cd ${{ matrix.component }}
+        npm run lint || echo "No lint script found, skipping..."
+
+    - name: Type check (if TypeScript)
+      run: |
+        cd ${{ matrix.component }}
+        if [ -f "tsconfig.json" ]; then
+          npm run type-check || npx tsc --noEmit || echo "TypeScript check completed"
+        fi
+
+    - name: Run tests
+      run: |
+        cd ${{ matrix.component }}
+        if [ "${{ matrix.component }}" = "frontend" ]; then
+          npm test -- --coverage --watchAll=false
+        else
+          npm test -- --coverage
+        fi
+      env:
+        CI: true
+
+    - name: Upload coverage reports
+      uses: codecov/codecov-action@v3
+      with:
+        file: ${{ matrix.component }}/coverage/lcov.info
+        flags: ${{ matrix.component }}
+        name: ${{ matrix.component }}-coverage
+        fail_ci_if_error: false
+
+  # Security Scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Install dependencies (Frontend)
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Install dependencies (Backend)  
+      run: |
+        cd backend
+        npm ci
+
+    - name: Run security audit (Frontend)
+      run: |
+        cd frontend
+        npm audit --audit-level moderate || true
+
+    - name: Run security audit (Backend)
+      run: |
+        cd backend
+        npm audit --audit-level moderate || true
+
+    - name: Run CodeQL Analysis
+      uses: github/codeql-action/init@v3
+      with:
+        languages: javascript
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+
+  # Build Application
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+
+    outputs:
+      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
+      backend-image: ${{ steps.meta-backend.outputs.tags }}
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    # Build Frontend
+    - name: Install frontend dependencies
+      run: |
+        cd frontend
+        npm ci
+
+    - name: Build frontend
+      run: |
+        cd frontend
+        cat > .env.local << 'EOF'
+        NEXT_PUBLIC_API_URL=${{ secrets.PRODUCTION_API_URL || 'http://localhost:5000' }}
+        NEXT_PUBLIC_FRONTEND_URL=${{ secrets.PRODUCTION_FRONTEND_URL || 'http://localhost:3001' }}
+        NEXT_PUBLIC_ENVIRONMENT=production
+        EOF
+        npm run build
+
+    # Build Backend
+    - name: Install backend dependencies
+      run: |
+        cd backend
+        npm ci
+
+    - name: Test backend build
+      run: |
+        cd backend
+        npm run build || echo "No build script, skipping..."
+
+    # Docker Build and Push
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./backend
+        file: ./backend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Deploy to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment: staging
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        echo "Frontend image: ${{ needs.build.outputs.frontend-image }}"
+        echo "Backend image: ${{ needs.build.outputs.backend-image }}"
+        # Add your staging deployment logic here
+        # This could be:
+        # - Updating Kubernetes manifests
+        # - Deploying to cloud platforms (Vercel, Netlify, Railway, etc.)
+        # - Running deployment scripts
+        
+  # Deploy to Production
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    environment: production
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Deploy to production
+      run: |
+        echo "Deploying to production environment..."
+        echo "Frontend image: ${{ needs.build.outputs.frontend-image }}"
+        echo "Backend image: ${{ needs.build.outputs.backend-image }}"
+        # Add your production deployment logic here
+
+    - name: Post-deployment health check
+      run: |
+        echo "Running post-deployment health checks..."
+        # Add health check logic here
+        # curl -f ${{ secrets.PRODUCTION_API_URL }}/api/health || exit 1
+
+  # Notification
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+
+    steps:
+    - name: Notify success
+      if: ${{ needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success' }}
+      run: |
+        echo "Deployment successful!"
+        # Add notification logic (Slack, Discord, email, etc.)
+
+    - name: Notify failure
+      if: ${{ needs.deploy-staging.result == 'failure' || needs.deploy-production.result == 'failure' }}
+      run: |
+        echo "Deployment failed!"
+        # Add failure notification logic

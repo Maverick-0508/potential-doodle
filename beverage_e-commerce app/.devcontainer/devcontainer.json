@@ -11,7 +11,7 @@
         "terminal.integrated.defaultProfile.linux": "bash",
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
-          "source.fixAll.eslint": true
+          "source.fixAll.eslint":true
         },
         "javascript.format.enable": true,
         "typescript.format.enable": true,

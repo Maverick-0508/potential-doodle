@@ -1,0 +1,154 @@
+name: Performance Testing
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  lighthouse:
+    name: Lighthouse Performance Test
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7-jammy
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      run: |
+        cd backend && npm ci
+        cd ../frontend && npm ci
+
+    - name: Start Backend
+      run: |
+        cd backend
+        cat > .env << 'EOF'
+        NODE_ENV=test
+        PORT=5000
+        MONGO_URI=mongodb://localhost:27017/beverage_ecommerce_test
+        JWT_SECRET=test-jwt-secret-key-32-characters-long
+        FRONTEND_URL=http://localhost:3001
+        EOF
+        npm start &
+        sleep 10
+
+    - name: Start Frontend
+      run: |
+        cd frontend
+        cat > .env.local << 'EOF'
+        NEXT_PUBLIC_API_URL=http://localhost:5000
+        NEXT_PUBLIC_FRONTEND_URL=http://localhost:3001
+        NEXT_PUBLIC_ENVIRONMENT=test
+        EOF
+        npm run build
+        npm start &
+        sleep 15
+
+    - name: Wait for applications
+      run: |
+        until curl -f http://localhost:5000/api/health; do sleep 2; done
+        until curl -f http://localhost:3001; do sleep 2; done
+
+    - name: Run Lighthouse CI
+      run: |
+        npm install -g @lhci/cli@0.12.x
+        lhci autorun
+      env:
+        LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+
+  load-test:
+    name: Load Testing
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:7-jammy
+        ports:
+          - 27017:27017
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install and start backend
+      run: |
+        cd backend
+        npm ci
+        cat > .env << 'EOF'
+        NODE_ENV=test
+        PORT=5000
+        MONGO_URI=mongodb://localhost:27017/beverage_ecommerce_test
+        JWT_SECRET=test-jwt-secret-key-32-characters-long
+        FRONTEND_URL=http://localhost:3001
+        EOF
+        npm start &
+        sleep 10
+
+    - name: Install Artillery
+      run: npm install -g artillery@latest
+
+    - name: Run load tests
+      run: |
+        cat > artillery-config.yml << 'EOF'
+        config:
+          target: 'http://localhost:5000'
+          phases:
+            - duration: 60
+              arrivalRate: 10
+              name: "Warm up"
+            - duration: 120
+              arrivalRate: 20
+              name: "Sustained load"
+            - duration: 60
+              arrivalRate: 50
+              name: "Peak load"
+        scenarios:
+          - name: "API Health Check"
+            weight: 30
+            flow:
+              - get:
+                  url: "/api/health"
+          - name: "Get Products"
+            weight: 50
+            flow:
+              - get:
+                  url: "/api/products"
+          - name: "Product Categories"
+            weight: 20
+            flow:
+              - get:
+                  url: "/api/products/meta/categories"
+        EOF
+        artillery run artillery-config.yml
+
+    - name: Upload load test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: load-test-results
+        path: |
+          artillery-config.yml
+          *.json
