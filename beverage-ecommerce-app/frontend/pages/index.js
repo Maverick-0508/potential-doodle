@@ -1,3 +1,5 @@
+import OnboardingModal from '../components/OnboardingModal';
+import PersonalGreeting from '../components/PersonalGreeting';
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
@@ -23,11 +25,11 @@ import {
   Menu,
   MenuItem,
   Avatar,
-  CircularProgress,
-  Alert,
   ToggleButton,
   ToggleButtonGroup
 } from '@mui/material';
+import LoadingSpinner from '../components/LoadingSpinner';
+import Toast from '../components/Toast';
 import SearchIcon from '@mui/icons-material/Search';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -45,6 +47,7 @@ export default function HomePage() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
   const [anchorEl, setAnchorEl] = useState(null);
   const [purchaseMode, setPurchaseMode] = useState('individual'); // 'individual' or 'packets'
   const [selectedItems, setSelectedItems] = useState({}); // {productId: {variationIndex/packetIndex: quantity}}
@@ -64,6 +67,7 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error('Error fetching categories:', error);
+      setToast({ open: true, message: 'Error fetching categories', severity: 'error' });
     }
   };
 
@@ -80,10 +84,12 @@ export default function HomePage() {
         setProducts(data.products);
       } else {
         setError('Failed to load products');
+        setToast({ open: true, message: 'Failed to load products', severity: 'error' });
       }
     } catch (error) {
       console.error('Error fetching products:', error);
       setError('Network error. Please try again.');
+      setToast({ open: true, message: 'Network error. Please try again.', severity: 'error' });
     } finally {
       setLoading(false);
     }
@@ -111,9 +117,11 @@ export default function HomePage() {
             ? { ...product, isFavorite: !product.isFavorite }
             : product
         ));
+        setToast({ open: true, message: 'Favorite updated!', severity: 'success' });
       }
     } catch (error) {
       console.error('Error updating favorite:', error);
+      setToast({ open: true, message: 'Error updating favorite', severity: 'error' });
     }
   };
 
@@ -208,6 +216,7 @@ export default function HomePage() {
       <Head>
         <title>BeverageHub - Fresh Drinks Delivered</title>
       </Head>
+      <OnboardingModal />
       
       {/* Header */}
       <AppBar position="static">
@@ -260,16 +269,16 @@ export default function HomePage() {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ py: 3 }}>
+        <Toast
+          open={toast.open}
+          onClose={() => setToast({ ...toast, open: false })}
+          severity={toast.severity}
+          message={toast.message}
+        />
         {isAuthenticated && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            Welcome back, {user?.name}!
-          </Alert>
-        )}
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
+          <Box sx={{ mb: 2 }}>
+            <PersonalGreeting user={user} />
+          </Box>
         )}
 
         {/* Search Bar */}
@@ -326,11 +335,7 @@ export default function HomePage() {
         </Box>
 
         {/* Loading State */}
-        {loading && (
-          <Box display="flex" justifyContent="center" py={4}>
-            <CircularProgress />
-          </Box>
-        )}
+        {loading && <LoadingSpinner message="Loading products..." />}
 
         {/* Products Grid */}
         {!loading && (

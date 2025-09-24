@@ -1,0 +1,17 @@
+{
+  "short_name": "BeverageHub",
+  "name": "BeverageHub - Fresh Drinks Delivered",
+  "icons": [
+    {
+      "src": "/images/products/coca-cola.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#1976d2",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#1976d2",
+  "description": "Order your favorite beverages online and get them delivered fast!"
+}
