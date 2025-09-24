@@ -2,9 +2,19 @@
   "name": "beverage-ecommerce-backend",
   "version": "0.1.0",
   "private": true,
+  "description": "Backend API for the Beverage E-Commerce application. Handles authentication, product, order, and wallet management.",
+  "author": "Maverick-0508 <your-email@example.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Maverick-0508/potential-doodle.git"
+  },
   "scripts": {
     "dev": "nodemon src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+  "test": "jest --runInBand",
+  "coverage": "jest --coverage",
+    "lint": "eslint src --ext .js,.jsx,.ts,.tsx"
   },
   "dependencies": {
     "axios": "latest",
@@ -17,9 +27,17 @@
     "mongoose": "latest"
   },
   "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
     "jest": "^30.1.3",
     "mongodb-memory-server": "^10.2.1",
     "nodemon": "latest",
-    "supertest": "^7.1.4"
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "typescript": "^5.9.2"
   }
 }
