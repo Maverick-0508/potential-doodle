@@ -1,0 +1,85 @@
+name: CI - build & smoke tests
+
+on:
+  push:
+    branches: [ main, chore/upgrade-deps ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-smoke:
+    name: Build images and run smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: ./backend/Dockerfile
+          # do not push; we only need local image for smoke tests
+          push: false
+          tags: backend:ci
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./
+          file: ./frontend/Dockerfile
+          push: false
+          tags: frontend:ci
+
+      - name: Tag images to match compose expectations
+        run: |
+          docker tag backend:ci backend:latest || true
+          docker tag frontend:ci frontend:latest || true
+
+      - name: Start docker compose
+        run: |
+          docker compose -f deploy/docker-compose.prod.yml --env-file deploy/.env.test up -d --build
+
+      - name: Wait for backend health
+        run: |
+          echo "Waiting for backend /api/health..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5000/api/health >/dev/null 2>&1; then
+              echo "backend healthy" && break
+            fi
+            sleep 2
+          done
+
+      - name: Run smoke tests
+        env:
+          DEMO_EMAIL: demo@beverage.test
+          DEMO_PASSWORD: demopassword
+        run: |
+          set -euo pipefail
+          echo "Checking root page"
+          curl -fsS http://localhost/ -o /tmp/root.html
+          echo "Checking /api/health"
+          curl -fsS http://localhost/api/health | jq .
+          echo "Checking /api/products (expect array)"
+          curl -fsS http://localhost/api/products | jq '. | length'
+
+          echo "Attempting demo login"
+          TOKEN=$(curl -fsS -X POST http://localhost/api/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"${DEMO_EMAIL}\",\"password\":\"${DEMO_PASSWORD}\"}" | jq -r '.token // empty') || true
+          if [ -z "$TOKEN" ]; then
+            echo "Demo login did not return a token" >&2
+            exit 1
+          fi
+          echo "Demo login succeeded"
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "--- docker compose logs ---"
+          docker compose -f deploy/docker-compose.prod.yml logs --tail=200
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f deploy/docker-compose.prod.yml down -v

@@ -23,7 +23,7 @@ db.users.insertOne({
     password: "$2a$10$dummy.hash.for.development.only",
     role: "admin",
     isVerified: true,
-    phoneNumber: "+254700000000",
+    phoneNumber: "+254758827319",
     createdAt: new Date(),
     updatedAt: new Date()
 });

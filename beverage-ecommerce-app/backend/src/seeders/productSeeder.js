@@ -199,14 +199,31 @@ const sampleProducts = [
 
 const seedProducts = async () => {
   try {
-    // Clear existing products
-    await Product.deleteMany({});
-    
-    // Insert sample products
-    const products = await Product.insertMany(sampleProducts);
-    console.log(`✅ Seeded ${products.length} products successfully`);
-    
-    return products;
+    const results = [];
+
+    for (const p of sampleProducts) {
+      // Upsert by name to make seeding idempotent
+      const existing = await Product.findOne({ name: p.name });
+      if (existing) {
+        // Update fields that may have changed
+        existing.description = p.description;
+        existing.category = p.category;
+        existing.brand = p.brand;
+        existing.basePrice = p.basePrice;
+        existing.variations = p.variations;
+        existing.packets = p.packets || existing.packets;
+        existing.rating = p.rating;
+        existing.isActive = p.isActive !== undefined ? p.isActive : existing.isActive;
+        await existing.save();
+        results.push(existing);
+      } else {
+        const created = await Product.create(p);
+        results.push(created);
+      }
+    }
+
+    console.log(`✅ Seeded/Updated ${results.length} products successfully`);
+    return results;
   } catch (error) {
     console.error('❌ Error seeding products:', error);
     throw error;
