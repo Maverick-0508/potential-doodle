@@ -11,6 +11,8 @@ COPY package*.json ./
 
 # Install dependencies
 FROM base AS deps
+# Copy lockfile too to ensure deterministic installs
+COPY package-lock.json ./
 RUN npm ci --only=production && npm cache clean --force
 
 # Development dependencies for building
