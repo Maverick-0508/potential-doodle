@@ -3,9 +3,10 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const { seedProducts } = require('./seeders/productSeeder');
+const { seedDemoUser } = require('./seeders/userSeeder');
 
 // Exported for testing
-let server;
+let _server;
 
 // Environment validation
 const validateEnvironment = () => {
@@ -86,19 +87,22 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const walletRoutes = require('./routes/wallet');
+const checkoutRoutes = require('./routes/checkout');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/checkout', checkoutRoutes);
 
 app.get('/', (req, res) => {
   res.json({
     message: 'Beverage E-Commerce Backend API',
     version: '1.0.0',
     status: 'Running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -170,7 +174,7 @@ app.post('/api/seed/products', async (req, res) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     message: 'Internal server error',
@@ -192,45 +196,117 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/beverage_e
 
 // Enhanced MongoDB connection
 const connectToDatabase = async () => {
-  try {
-    await mongoose.connect(MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      maxPoolSize: 10,
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
+  const maxAttempts = parseInt(process.env.MONGO_CONNECT_MAX_ATTEMPTS || '10', 10);
+  const baseDelayMs = parseInt(process.env.MONGO_CONNECT_BASE_DELAY_MS || '1000', 10);
 
-    console.log('✅ Connected to MongoDB');
-    console.log(`📊 Database: ${mongoose.connection.name}`);
+  let attempt = 0;
 
-    // Auto-seed products if none exist
-    const Product = require('./models/Product');
-    const productCount = await Product.countDocuments();
-    if (productCount === 0) {
-      console.log('🌱 No products found. Seeding sample products...');
+  while (true) {
+    attempt += 1;
+    try {
+      console.log(`Attempting to connect to MongoDB (attempt ${attempt})...`);
+      await mongoose.connect(MONGO_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 5000,
+        socketTimeoutMS: 45000,
+      });
+
+      console.log('✅ Connected to MongoDB');
+      console.log(`📊 Database: ${mongoose.connection.name}`);
+
+      // Event hooks for connection health
+      mongoose.connection.on('error', (err) => {
+        console.error('❌ MongoDB connection error (event):', err.message || err);
+      });
+
+      mongoose.connection.on('disconnected', () => {
+        console.warn('⚠️ MongoDB disconnected. Will attempt to reconnect.');
+      });
+
+      mongoose.connection.on('reconnected', () => {
+        console.log('✅ MongoDB reconnected');
+      });
+
+      // Auto-seed products if none exist (only on first successful connection)
       try {
-        await seedProducts();
-        console.log('✅ Sample products seeded successfully');
-      } catch (seedError) {
-        console.error('❌ Error seeding products:', seedError.message);
-      }
-    } else {
-      console.log(`📦 Found ${productCount} products in database`);
-    }
+  if (process.env.NODE_ENV !== 'production' || process.env.FORCE_SEED === 'true') {
+          const Product = require('./models/Product');
+          const productCount = await Product.countDocuments();
+          if (productCount === 0) {
+            console.log('🌱 No products found. Seeding sample products...');
+            try {
+              await seedProducts();
+              console.log('✅ Sample products seeded successfully');
+            } catch (seedError) {
+              console.error('❌ Error seeding products:', seedError.message);
+            }
+          } else {
+            console.log(`📦 Found ${productCount} products in database`);
+          }
 
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error.message);
-    process.exit(1);
+          // Ensure a demo/admin user exists for development/testing
+          try {
+            await seedDemoUser();
+            console.log('✅ Demo user ensured');
+          } catch (userSeedError) {
+            console.error('❌ Error ensuring demo user:', userSeedError.message);
+          }
+        }
+      } catch (seedErr) {
+        console.error('Seeding check error:', seedErr.message || seedErr);
+      }
+
+      // Connected successfully - exit the loop
+      break;
+    } catch (error) {
+      console.error('❌ MongoDB connection error:', error.message || error);
+
+      if (attempt >= maxAttempts) {
+        // After exhausting attempts, switch to periodic retries but don't exit the process
+        const periodicDelayMs = parseInt(process.env.MONGO_CONNECT_PERIODIC_DELAY_MS || '30000', 10);
+        console.error(`Exceeded ${maxAttempts} attempts. Will retry every ${periodicDelayMs / 1000}s until MongoDB is available.`);
+
+        // Wait until successful connection in a setInterval loop
+        await new Promise((resolve) => {
+          const handle = setInterval(async () => {
+            try {
+              console.log('Periodic retry: attempting to reconnect to MongoDB...');
+              await mongoose.connect(MONGO_URI, {
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
+                maxPoolSize: 10,
+                serverSelectionTimeoutMS: 5000,
+                socketTimeoutMS: 45000,
+              });
+              console.log('✅ Reconnected to MongoDB (periodic retry)');
+              clearInterval(handle);
+              resolve();
+            } catch (err) {
+              console.warn('Periodic retry failed:', err.message || err);
+            }
+          }, periodicDelayMs);
+        });
+
+        // After periodic retry resolves, break the outer loop
+        break;
+      }
+
+      // Exponential backoff before next attempt
+      const delayMs = Math.min(baseDelayMs * (2 ** (attempt - 1)), 30000);
+      console.log(`Waiting ${delayMs}ms before next MongoDB connection attempt...`);
+      // eslint-disable-next-line no-await-in-loop
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+    }
   }
 };
-
 
 if (require.main === module) {
   // Only start server if run directly
   const startServer = async () => {
     await connectToDatabase();
-    server = app.listen(PORT, () => {
+    _server = app.listen(PORT, () => {
       console.log('🚀 Server started successfully');
       console.log(`📍 Port: ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -267,4 +343,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = app;
+module.exports = { app, server: _server };

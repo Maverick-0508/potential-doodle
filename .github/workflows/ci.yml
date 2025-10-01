@@ -1,52 +1,136 @@
-name: CI
+name: CI - build & smoke tests
 
 on:
   push:
-    branches: [main]
+    branches: [ main, chore/upgrade-deps ]
   pull_request:
-    branches: [main]
+    branches: [ main ]
+
+name: CI - build & smoke tests
+
+on:
+  push:
+    branches: [ main, chore/upgrade-deps ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
-  backend:
+  build-and-smoke:
+    name: Build images and run smoke tests
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: beverage-ecommerce-app/backend
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Type check
-        run: npx tsc --noEmit
-      - name: Test
-        run: npm run test
-      - name: Coverage
-        run: npm run coverage
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  frontend:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: beverage-ecommerce-app/frontend
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
         with:
-          node-version: 20
-      - name: Install dependencies
-        run: npm ci
-      - name: Lint
-        run: npm run lint
-      - name: Type check
-        run: npx tsc --noEmit
-      - name: Test
-        run: npm run test
-      - name: Coverage
-        run: npm run coverage
+          context: ./beverage-ecommerce-app/backend
+          file: ./Dockerfile
+          # do not push; we only need local image for smoke tests
+          push: false
+          tags: backend:ci
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./beverage-ecommerce-app/frontend
+          file: ./Dockerfile
+          push: false
+          tags: frontend:ci
+
+      - name: Tag images to match compose expectations
+        run: |
+          docker tag backend:ci backend:latest || true
+          docker tag frontend:ci frontend:latest || true
+
+      - name: Create CI env file (merge .env.test + secrets)
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          DEMO_PHONE: ${{ secrets.DEMO_PHONE }}
+        run: |
+          set -euo pipefail
+          cp beverage-ecommerce-app/deploy/.env.test beverage-ecommerce-app/deploy/.env.ci
+          # append secrets only when provided (keeps .env.test defaults otherwise)
+          if [ -n "${JWT_SECRET:-}" ]; then printf "JWT_SECRET=%s\n" "$JWT_SECRET" >> beverage-ecommerce-app/deploy/.env.ci; fi
+          if [ -n "${SESSION_SECRET:-}" ]; then printf "SESSION_SECRET=%s\n" "$SESSION_SECRET" >> beverage-ecommerce-app/deploy/.env.ci; fi
+          if [ -n "${DEMO_EMAIL:-}" ]; then printf "DEMO_EMAIL=%s\n" "$DEMO_EMAIL" >> beverage-ecommerce-app/deploy/.env.ci; fi
+          if [ -n "${DEMO_PASSWORD:-}" ]; then printf "DEMO_PASSWORD=%s\n" "$DEMO_PASSWORD" >> beverage-ecommerce-app/deploy/.env.ci; fi
+          if [ -n "${DEMO_PHONE:-}" ]; then printf "DEMO_PHONE=%s\n" "$DEMO_PHONE" >> beverage-ecommerce-app/deploy/.env.ci; fi
+
+      - name: Start docker compose
+        run: |
+          docker compose -f beverage-ecommerce-app/deploy/docker-compose.prod.yml --env-file beverage-ecommerce-app/deploy/.env.ci up -d --build
+
+      - name: Wait for backend health
+        run: |
+          echo "Waiting for backend /api/health..."
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5000/api/health >/dev/null 2>&1; then
+              echo "backend healthy" && break
+            fi
+            sleep 2
+          done
+
+      - name: Run smoke tests
+        run: |
+          set -euo pipefail
+          # load env values from .env.ci so we pick up DEMO_* values provided by secrets or defaults
+          set -a; source beverage-ecommerce-app/deploy/.env.ci; set +a
+
+          echo "Checking root page"
+          curl -fsS http://localhost/ -o /tmp/root.html
+          echo "Checking /api/health"
+          curl -fsS http://localhost/api/health | jq .
+          echo "Checking /api/products (expect array)"
+          curl -fsS http://localhost/api/products | jq '.products | length'
+
+          echo "Attempting demo login"
+          TOKEN=$(curl -fsS -X POST http://localhost/api/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"${DEMO_EMAIL}\",\"password\":\"${DEMO_PASSWORD}\"}" | jq -r '.token // empty') || true
+          if [ -z "$TOKEN" ]; then
+            echo "Demo login did not return a token" >&2
+            exit 1
+          fi
+          echo "Demo login succeeded"
+
+          echo "\nRegister + login a fresh test user"
+          # create deterministic-but-unique email & Kenyan phone using run id
+          TEST_EMAIL="ci_user_${GITHUB_RUN_ID}@beverage.test"
+          TEST_PHONE="254$(printf '%09d' "$GITHUB_RUN_ID")"
+          TEST_PASSWORD="TestPass123!"
+
+          echo "Registering $TEST_EMAIL with phone $TEST_PHONE"
+          REG_RESP=$(curl -fsS -X POST http://localhost/api/auth/register -H 'Content-Type: application/json' -d "{\"name\":\"CI User\",\"email\":\"${TEST_EMAIL}\",\"phone\":\"${TEST_PHONE}\",\"password\":\"${TEST_PASSWORD}\"}" || true)
+          echo "$REG_RESP" | jq .
+
+          echo "Logging in test user"
+          LOGIN_TOKEN=$(curl -fsS -X POST http://localhost/api/auth/login -H 'Content-Type: application/json' -d "{\"email\":\"${TEST_EMAIL}\",\"password\":\"${TEST_PASSWORD}\"}" | jq -r '.token // empty' || true)
+          if [ -z "$LOGIN_TOKEN" ]; then
+            echo "Test user login failed" >&2
+            exit 1
+          fi
+          echo "Test user login succeeded"
+
+      - name: Collect compose logs to file (always)
+        run: |
+          docker compose -f beverage-ecommerce-app/deploy/docker-compose.prod.yml logs --no-color --tail=200 > compose-logs.txt || true
+
+      - name: Upload compose logs (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compose-logs
+          path: compose-logs.txt
+
+      - name: Teardown
+        if: always()
+        run: docker compose -f beverage-ecommerce-app/deploy/docker-compose.prod.yml down -v
+        run: docker compose -f beverage-ecommerce-app/deploy/docker-compose.prod.yml down -v
+
+

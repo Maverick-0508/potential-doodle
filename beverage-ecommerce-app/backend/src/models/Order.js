@@ -57,9 +57,22 @@ const orderSchema = new mongoose.Schema({
     enum: ['pending', 'completed', 'failed'],
     default: 'pending'
   },
-  mpesaTransactionId: String,
+  paidAt: Date,
+  mpesaDetails: {
+    checkoutRequestId: String,
+    merchantRequestId: String,
+    mpesaReceiptNumber: String,
+    transactionDate: String,
+    phoneNumber: String,
+    amount: Number,
+    initiatedAt: Date,
+    completedAt: Date,
+    failureReason: String
+  },
+  mpesaTransactionId: String, // Deprecated, use mpesaDetails.mpesaReceiptNumber
   orderStatus: {
     type: String,
+    alias: 'status',
     enum: ['pending', 'confirmed', 'preparing', 'out_for_delivery', 'delivered', 'cancelled'],
     default: 'pending'
   },
