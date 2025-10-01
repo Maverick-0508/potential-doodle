@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const { seedProducts } = require('./seeders/productSeeder');
 
 // Exported for testing
-let server;
+let _server;
 
 // Environment validation
 const validateEnvironment = () => {
@@ -86,19 +86,22 @@ const authRoutes = require('./routes/auth');
 const productRoutes = require('./routes/products');
 const orderRoutes = require('./routes/orders');
 const walletRoutes = require('./routes/wallet');
+const checkoutRoutes = require('./routes/checkout');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/wallet', walletRoutes);
+app.use('/api/checkout', checkoutRoutes);
 
 app.get('/', (req, res) => {
   res.json({
     message: 'Beverage E-Commerce Backend API',
     version: '1.0.0',
     status: 'Running',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -170,7 +173,7 @@ app.post('/api/seed/products', async (req, res) => {
 });
 
 // Global error handler
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   console.error('Unhandled error:', err);
   res.status(500).json({
     message: 'Internal server error',
@@ -230,7 +233,7 @@ if (require.main === module) {
   // Only start server if run directly
   const startServer = async () => {
     await connectToDatabase();
-    server = app.listen(PORT, () => {
+    _server = app.listen(PORT, () => {
       console.log('🚀 Server started successfully');
       console.log(`📍 Port: ${PORT}`);
       console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -267,4 +270,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = app;
+module.exports = { app, server: _server };

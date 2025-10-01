@@ -24,8 +24,8 @@ services:
       - PORT=5000
       - MONGO_URI=${MONGO_URI}
       - JWT_SECRET=${JWT_SECRET}
-      - MPESA_CONSUMER_KEY=${JfQdZfuliyMuD5tZ4leEQfwRbDqw5cKfAUNbYfiteiGQ2N1O}
-      - MPESA_CONSUMER_SECRET=${mxjb7odV57WMTuOHuCF2crs2wyBrmsBk2xeKeT4ATuJAGgQQxXY8vE1LY42gAxmQ}
+      - MPESA_CONSUMER_KEY=${MPESA_CONSUMER_KEY}
+      - MPESA_CONSUMER_SECRET=${MPESA_CONSUMER_SECRET}
       - MPESA_SHORTCODE=${MPESA_SHORTCODE}
       - MPESA_PASSKEY=${MPESA_PASSKEY}
       - MPESA_CALLBACK_URL=${MPESA_CALLBACK_URL}
@@ -79,8 +79,6 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    env_file:
-      - .env.prod
 
 volumes:
   mongodb-data:

@@ -6,6 +6,30 @@ const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
 
+// MPESA Configuration status endpoint (for testing)
+router.get('/mpesa/config', (req, res) => {
+  try {
+    const configStatus = mpesaService.getConfigStatus();
+    res.json({
+      success: true,
+      configured: configStatus.configured,
+      environment: configStatus.environment,
+      baseUrl: configStatus.baseUrl,
+      hasConsumerKey: configStatus.hasConsumerKey,
+      hasConsumerSecret: configStatus.hasConsumerSecret,
+      hasShortcode: configStatus.hasShortcode,
+      hasPasskey: configStatus.hasPasskey,
+      hasCallbackUrl: configStatus.hasCallbackUrl
+    });
+  } catch (error) {
+    console.error('Error getting MPESA config:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while checking MPESA configuration' 
+    });
+  }
+});
+
 // Get wallet balance
 router.get('/', auth, async (req, res) => {
   try {

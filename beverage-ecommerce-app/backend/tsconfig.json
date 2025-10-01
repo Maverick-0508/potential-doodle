@@ -6,7 +6,13 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "rootDir": "src",
+    "types": ["node"]
   },
-  "include": ["src/**/*.js", "tests/**/*.js"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
